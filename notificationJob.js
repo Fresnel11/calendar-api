@@ -19,31 +19,37 @@ wss.on('connection', ws => {
 
 // Fonction pour envoyer une notification en temps réel
 const sendWebSocketNotification = (event) => {
+    let message;
+
+    if (event.reminder === 'at_event_time') {
+        message = `🔔 C'est l'heure ! L'événement "${event.title}" commence maintenant.`;
+    } else {
+        message = `⏰ Rappel : "${event.title}" approche ! (${event.reminder.replace('_', ' ')})`;
+    }
+
     wss.clients.forEach(client => {
         if (client.readyState === WebSocket.OPEN) {
-            client.send(JSON.stringify({
-                message: `Rappel : ${event.title} commence bientôt !`,
-                event
-            }));
+            client.send(JSON.stringify({ message, event }));
         }
     });
 };
+
 
 // Fonction pour envoyer un email de rappel
 const sendEmailNotification = async (event) => {
     const transporter = nodemailer.createTransport({
         host: "sandbox.smtp.mailtrap.io",
-        port: 2525, 
+        port: 2525,
         auth: {
             user: "3a20dd5c090263",
             pass: "fc054ab0d9c60b"
         }
     });
-    
+
 
     const mailOptions = {
         from: "3a20dd5c090263",
-        to: 'fresneljeanclaudecossou64@gmail.com', 
+        to: 'fresneljeanclaudecossou64@gmail.com',
         subject: `Rappel : ${event.title}`,
         text: `Votre événement "${event.title}" est prévu le ${new Date(event.startDate).toLocaleString()}`
     };
