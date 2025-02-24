@@ -15,6 +15,19 @@ const wss = new WebSocket.Server({ port: 8080 });
 
 wss.on('connection', ws => {
     console.log('🟢 Client WebSocket connecté');
+
+    // Permettre au client d'envoyer son ID utilisateur après connexion
+    ws.on('message', (message) => {
+        try {
+            const data = JSON.parse(message);
+            if (data.userId) {
+                ws.userId = data.userId;
+                console.log(`👤 Utilisateur connecté avec l'ID: ${ws.userId}`);
+            }
+        } catch (error) {
+            console.error('❌ Erreur de parsing du message WebSocket:', error);
+        }
+    });
 });
 
 // Fonction pour envoyer une notification en temps réel
@@ -27,6 +40,8 @@ const sendWebSocketNotification = (event) => {
         message = `⏰ Rappel : "${event.title}" approche ! (${event.reminder.replace('_', ' ')})`;
     }
 
+    console.log(`📢 Envoi de notification WebSocket à tous les clients: ${message}`);
+
     wss.clients.forEach(client => {
         if (client.readyState === WebSocket.OPEN) {
             client.send(JSON.stringify({ message, event }));
@@ -34,42 +49,43 @@ const sendWebSocketNotification = (event) => {
     });
 };
 
+// Fonction pour envoyer une notification à un utilisateur spécifique (invitation à un événement)
+const sendWebSocketNotificationToUser = (user, event) => {
+    console.log(`🔍 Tentative d'envoi de notification WebSocket à ${user.email} (ID: ${user._id})`);
 
-// Fonction pour envoyer un email de rappel
-const sendEmailNotification = async (event) => {
-    const transporter = nodemailer.createTransport({
-        host: "sandbox.smtp.mailtrap.io",
-        port: 2525,
-        auth: {
-            user: "3a20dd5c090263",
-            pass: "fc054ab0d9c60b"
+    const message = `📩 Vous avez été invité à participer à l'événement "${event.title}". Acceptez-vous l'invitation ?`;
+
+    let found = false;
+
+    wss.clients.forEach(client => {
+        console.log('found user', user);
+        
+        if (client.readyState === WebSocket.OPEN ) {
+            console.log(`📡 Vérification du client WebSocket avec userId: ${client.userId}`);
+            client.send(JSON.stringify({ message, event, action: 'invite' }));
+            found = true;
         }
     });
 
-
-    const mailOptions = {
-        from: "3a20dd5c090263",
-        to: 'fresneljeanclaudecossou64@gmail.com',
-        subject: `Rappel : ${event.title}`,
-        text: `Votre événement "${event.title}" est prévu le ${new Date(event.startDate).toLocaleString()}`
-    };
-
-    try {
-        await transporter.sendMail(mailOptions);
-        console.log(`📧 Email envoyé pour ${event.title}`);
-    } catch (error) {
-        console.error('❌ Erreur envoi email', error);
+    if (found) {
+        console.log(`✅ Notification envoyée à ${user.email} (ID: ${user._id})`);
+    } else {
+        console.warn(`⚠️ Aucun client WebSocket trouvé pour ${user.email} (ID: ${user._id})`);
     }
 };
 
+
 // Fonction pour calculer le moment du rappel
 const getReminderTime = (event) => {
-    // Créer un objet Date avec la date d'aujourd'hui et l'heure de l'événement
-    const eventDate = new Date();
-    const [hours, minutes] = event.startTime.split(':'); // Sépare l'heure et les minutes de startTime
-    eventDate.setHours(hours, minutes, 0, 0); // Définit l'heure et les minutes sur la date actuelle
+    if (!event.startTime || typeof event.startTime !== 'string' || !event.startTime.includes(':')) {
+        throw new Error('startTime est invalide ou manquant. Veuillez fournir un format valide "HH:MM".');
+    }
 
-    const eventTime = eventDate.getTime(); // Convertit la date en millisecondes
+    const eventDate = new Date();
+    const [hours, minutes] = event.startTime.split(':');
+    eventDate.setHours(hours, minutes, 0, 0);
+
+    const eventTime = eventDate.getTime();
     const reminderMap = {
         'at_event_time': 0,
         '5_min_before': 5 * 60 * 1000,
@@ -84,8 +100,7 @@ const getReminderTime = (event) => {
 
     const reminderTime = eventTime - (reminderMap[event.reminder] || 0);
 
-    // Logs pour afficher les détails
-    console.log(`⏱️ Calcul du rappel pour ${event.title}: `);
+    console.log(`⏱️ Calcul du rappel pour "${event.title}":`);
     console.log(`   - Heure de l'événement : ${new Date(eventTime)}`);
     console.log(`   - Rappel (${event.reminder}) : ${new Date(reminderTime)}`);
     console.log(`   - Heure actuelle : ${new Date()}`);
@@ -93,30 +108,30 @@ const getReminderTime = (event) => {
     return reminderTime;
 };
 
-
-
 // Vérification des rappels toutes les minutes
 schedule.scheduleJob('* * * * *', async () => {
-    console.log('🔎 Vérification des rappels...');
+    console.log(' Vérification des rappels...');
 
     const now = Date.now();
     const events = await Event.find({ reminder: { $ne: 'none' }, notificationSent: false });
 
-    events.forEach(async (event) => {
+    for (const event of events) {
         const reminderTime = getReminderTime(event);
-        if (reminderTime <= now && reminderTime > (now - 1000 * 60)) { // Événements dans la minute
+
+        if (reminderTime <= now && reminderTime > (now - 1000 * 60)) { // Vérifie si l'événement doit être notifié dans la minute
             console.log(`⏰ Envoi de la notification pour : ${event.title}`);
 
             sendWebSocketNotification(event);
-            await sendEmailNotification(event);
 
-            // Marquer l'événement comme notifié
             event.notificationSent = true;
             await event.save();
             console.log(`✅ Notification envoyée et événement marqué comme notifié : ${event.title}`);
         }
-    });
-
+    }
 });
 
 console.log('📅 Job de notification activé...');
+
+module.exports = {
+    sendWebSocketNotificationToUser
+};

@@ -4,8 +4,7 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const eventRoutes = require('./routes/eventRoutes');
 const authRoutes = require('./routes/auth');
-const MongoStore = require('connect-mongo');
-const session = require('express-session');
+
 
 const app = express();
 
@@ -16,20 +15,7 @@ app.use(cors());
 app.use('/api', eventRoutes);
 app.use('/api/auth', authRoutes);
 
-app.use(session({
-    secret: process.env.SESSION_SECRET, // Une clé secrète pour signer les sessions
-    resave: false,
-    saveUninitialized: false,
-    store: MongoStore.create({
-        mongoUrl: process.env.MONGO_URI, // Stockage des sessions dans MongoDB
-        collectionName: 'sessions'
-    }),
-    cookie: {
-        maxAge: 1000 * 60 * 60 * 24, // Durée de session : 1 jour
-        httpOnly: true, // Sécurise contre les attaques XSS
-        secure: false // Mettre à `true` en production avec HTTPS
-    }
-}));
+
 
 // Connexion à MongoDB
 mongoose.connect(process.env.MONGO_URI, {

@@ -1,5 +1,4 @@
 const express = require('express');
-const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const dotenv = require('dotenv');
@@ -9,21 +8,31 @@ dotenv.config();
 const router = express.Router();
 
 // Route d'inscription
+// Route d'inscription
 router.post('/register', async (req, res) => {
     const { email, password } = req.body;
 
+    if (!email || !password) {
+        return res.status(400).json({ message: "L'email et le mot de passe sont requis." });
+    }
+
     // Vérifie si l'utilisateur existe déjà
     const existingUser = await User.findOne({ email });
-    if (existingUser) return res.status(400).json({ message: 'Utilisateur déjà existant' });
+    if (existingUser) return res.status(400).json({ message: "Utilisateur déjà existant" });
 
     try {
         const newUser = new User({ email, password });
         await newUser.save();
-        res.status(201).json({ message: 'Utilisateur créé avec succès' });
+        
+        // Générer un token immédiatement après l'inscription
+        const token = jwt.sign({ userId: newUser._id, email: newUser.email, role: newUser.role }, process.env.JWT_SECRET, { expiresIn: '5h' });
+
+        res.status(201).json({ success: true, token });
     } catch (error) {
-        res.status(500).json({ message: 'Erreur serveur', error });
+        res.status(500).json({ message: "Erreur serveur", error });
     }
 });
+
 
 // Route de connexion
 router.post('/login', async (req, res) => {
@@ -38,9 +47,14 @@ router.post('/login', async (req, res) => {
     if (!isMatch) return res.status(400).json({ message: 'Mot de passe incorrect' });
 
     // Générer un JWT (Token)
-    const token = jwt.sign({ userId: user._id, email: user.email, role: user.role }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    const token = jwt.sign({ userId: user._id, email: user.email, role: user.role }, process.env.JWT_SECRET, { expiresIn: '5h' });
 
-    res.status(200).json({ message: 'Connexion réussie', token });
+    res.status(200).json({ success: true, token });
+});
+
+// Route de déconnexion (Suppression du token côté client)
+router.post('/logout', (req, res) => {
+    res.status(200).json({ message: 'Déconnexion réussie. Supprimez le token côté client.' });
 });
 
 module.exports = router;

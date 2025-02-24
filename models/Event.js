@@ -7,7 +7,11 @@ const eventSchema = new mongoose.Schema({
     startTime: { type: String, default: null },
     endTime: { type: String, default: null },
     allDay: { type: Boolean, default: false },
-    recurrence: { type: String, enum: ['none', 'daily', 'weekly', 'monthly', 'yearly'], default: 'none' },
+    recurrence: { 
+        type: String, 
+        enum: ['none', 'daily', 'weekly', 'monthly', 'yearly'], 
+        default: 'none' 
+    },
     location: { type: String, default: '' },
     description: { type: String, default: '' },
     reminder: { 
@@ -19,7 +23,15 @@ const eventSchema = new mongoose.Schema({
         ], 
         default: 'none' 
     },
-    notificationSent: { type: Boolean, default: false } // Pour éviter d'envoyer plusieurs notifications
+    notificationSent: { type: Boolean, default: false },
+
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null }, // Peut être null si l'utilisateur n'est pas connecté
+
+    participants: [{
+        user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        status: { type: String, enum: ['pending', 'accepted', 'declined'], default: 'pending' }
+    }]
+
 }, { timestamps: true });
 
 const Event = mongoose.model('Event', eventSchema);
