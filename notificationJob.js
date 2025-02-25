@@ -1,8 +1,9 @@
 const mongoose = require('mongoose');
 const schedule = require('node-schedule');
-const nodemailer = require('nodemailer');
 const WebSocket = require('ws');
 const Event = require('./models/Event');
+const jwt = require('jsonwebtoken');
+const Notification = require('./models/Notification');
 require('dotenv').config();
 
 // Connexion à MongoDB
@@ -13,25 +14,30 @@ mongoose.connect(process.env.MONGO_URI)
 // WebSocket Server (Notifications en temps réel)
 const wss = new WebSocket.Server({ port: 8080 });
 
-wss.on('connection', ws => {
-    console.log('🟢 Client WebSocket connecté');
+wss.on('connection', (ws, req) => {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const token = url.searchParams.get('token');
 
-    // Permettre au client d'envoyer son ID utilisateur après connexion
-    ws.on('message', (message) => {
-        try {
-            const data = JSON.parse(message);
-            if (data.userId) {
-                ws.userId = data.userId;
-                console.log(`👤 Utilisateur connecté avec l'ID: ${ws.userId}`);
-            }
-        } catch (error) {
-            console.error('❌ Erreur de parsing du message WebSocket:', error);
-        }
-    });
+    if (!token) {
+        ws.close();
+        return;
+    }
+
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        ws.userId = decoded.userId;
+        console.log(`WebSocket connecté pour l'utilisateur ${ws.userId}`);
+    } catch (err) {
+        console.error('Token WebSocket invalide:', err);
+        ws.close();
+    }
+
+    ws.on('error', console.error);
 });
 
+
 // Fonction pour envoyer une notification en temps réel
-const sendWebSocketNotification = (event) => {
+const sendWebSocketNotification = async(event) => {
     let message;
 
     if (event.reminder === 'at_event_time') {
@@ -42,6 +48,14 @@ const sendWebSocketNotification = (event) => {
 
     console.log(`📢 Envoi de notification WebSocket à tous les clients: ${message}`);
 
+    // Sauvegarde en base de données
+    await Notification.create({
+        userId: event.userId,  // Assure-toi que chaque événement a un userId associé
+        eventId: event._id,
+        type: 'reminder',
+        message: message
+    });
+
     wss.clients.forEach(client => {
         if (client.readyState === WebSocket.OPEN) {
             client.send(JSON.stringify({ message, event }));
@@ -50,27 +64,39 @@ const sendWebSocketNotification = (event) => {
 };
 
 // Fonction pour envoyer une notification à un utilisateur spécifique (invitation à un événement)
-const sendWebSocketNotificationToUser = (user, event) => {
-    console.log(`🔍 Tentative d'envoi de notification WebSocket à ${user.email} (ID: ${user._id})`);
+const sendWebSocketNotificationToUser = async (targetUser, event) => {
+    console.log(`🔍 Tentative d'envoi de notification WebSocket à ${targetUser.email} (ID: ${targetUser._id})`);
 
-    const message = `📩 Vous avez été invité à participer à l'événement "${event.title}". Acceptez-vous l'invitation ?`;
+    const message = `📩 Vous avez été invité à participer à l'événement "${event.title}" . Acceptez-vous l'invitation ?`;
+
+    // Sauvegarde de la notification en base de données
+    await Notification.create({
+        userId: targetUser._id,
+        eventId: event._id,
+        type: 'invite',
+        message: message
+    });
 
     let found = false;
 
     wss.clients.forEach(client => {
-        console.log('found user', user);
-        
-        if (client.readyState === WebSocket.OPEN ) {
-            console.log(`📡 Vérification du client WebSocket avec userId: ${client.userId}`);
-            client.send(JSON.stringify({ message, event, action: 'invite' }));
+        // Vérifier si le client est le bon utilisateur
+        if (client.readyState === WebSocket.OPEN && client.userId === targetUser._id.toString()) {
+            console.log(`📡 Envoi de notification au client WebSocket avec userId: ${client.userId}`);
+            client.send(JSON.stringify({
+                message,
+                event,
+                action: 'invite',
+                targetUserId: targetUser._id // Ajouter l'ID de l'utilisateur ciblé
+            }));
             found = true;
         }
     });
 
     if (found) {
-        console.log(`✅ Notification envoyée à ${user.email} (ID: ${user._id})`);
+        console.log(`✅ Notification envoyée à ${targetUser.email} (ID: ${targetUser._id})`);
     } else {
-        console.warn(`⚠️ Aucun client WebSocket trouvé pour ${user.email} (ID: ${user._id})`);
+        console.warn(`⚠️ Aucun client WebSocket trouvé pour ${targetUser.email} (ID: ${targetUser._id})`);
     }
 };
 

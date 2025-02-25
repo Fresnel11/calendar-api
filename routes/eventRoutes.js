@@ -10,7 +10,7 @@ const User = require('../models/User');
 router.post('/addevents', authMiddleware, async (req, res) => {
     try {
         console.log('Données reçues:', req.body);
-        console.log('Utilisateur connecté:', req.user);
+        console.log('Utilisateur connecté:', req.body.createdBy);
 
         const { reminder, participants } = req.body;
         const validReminders = [
@@ -63,19 +63,19 @@ router.post('/addevents', authMiddleware, async (req, res) => {
         // Notifications aux participants
         if (newEvent.participants.length > 0) {
             for (const participant of newEvent.participants) {
+                // Seul un participant avec statut 'pending' sera notifié
                 if (participant.status === 'pending') {
                     const user = await User.findById(participant.user);
-                    if (user) {
-                        // Passer l'ID du créateur pour exclure l'utilisateur créateur
+                    // Vérifier que l'utilisateur existe et n'est pas le créateur
+                    if (user && (!req.user || user._id.toString() !== req.user._id.toString())) {
                         sendWebSocketNotificationToUser(user, newEvent);
                         console.log(`✅ Notification envoyée à ${user.email} pour l'événement : ${newEvent.title}`);
                     } else {
-                        console.warn(`⚠️ Impossible d'envoyer une notification : utilisateur ${participant.user} introuvable.`);
+                        console.warn(`⚠️ Notification non envoyée : utilisateur ${participant.user} est le créateur ou introuvable.`);
                     }
                 }
             }
         }
-
 
         res.status(201).json(newEvent);
     } catch (error) {
@@ -83,12 +83,6 @@ router.post('/addevents', authMiddleware, async (req, res) => {
         res.status(500).json({ message: "Erreur lors de l'ajout de l'événement", error });
     }
 });
-
-
-
-
-
-
 
 
 
@@ -135,11 +129,25 @@ router.post('/events/:id/addParticipant', async (req, res) => {
 });
 
 // Récupérer tous les événements
-router.get('/events', async (req, res) => {
+// Récupérer les événements de l'utilisateur connecté
+router.get('/events', authMiddleware, async (req, res) => {
     try {
-        const events = await Event.find();
+        if (!req.user || !req.user._id) {
+            return res.status(401).json({ message: 'Utilisateur non authentifié.' });
+        }
+        // Récupérer les événements créés par l'utilisateur ou auxquels il participe
+        const events = await Event.find({
+            $or: [
+                { createdBy: req.user._id }, // Événements créés par l'utilisateur
+                { 'participants.user': req.user._id } // Événements auxquels l'utilisateur participe
+            ]
+        });
+        console.log('req', req.user._id);
+
+
         res.status(200).json(events);
     } catch (error) {
+        console.error('Erreur lors de la récupération des événements:', error);
         res.status(500).json({ message: error.message });
     }
 });
@@ -267,6 +275,8 @@ router.get('/users/search', async (req, res) => {
         res.status(500).json({ message: 'Erreur lors de la recherche des utilisateurs', error });
     }
 });
+
+
 
 
 module.exports = router;

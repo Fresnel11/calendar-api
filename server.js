@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const eventRoutes = require('./routes/eventRoutes');
 const authRoutes = require('./routes/auth');
+const notifRoutes = require('./routes/notifRoutes');
 
 
 const app = express();
@@ -14,6 +15,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cors());
 app.use('/api', eventRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/notif', notifRoutes);
 
 
 
