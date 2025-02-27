@@ -25,7 +25,7 @@ router.post('/register', async (req, res) => {
         await newUser.save();
         
         // Générer un token immédiatement après l'inscription
-        const token = jwt.sign({ userId: newUser._id, email: newUser.email, role: newUser.role }, process.env.JWT_SECRET, { expiresIn: '5h' });
+        const token = jwt.sign({ userId: newUser._id, email: newUser.email, role: newUser.role }, process.env.JWT_SECRET, { expiresIn: '24h' });
 
         res.status(201).json({ success: true, token });
     } catch (error) {
@@ -47,7 +47,7 @@ router.post('/login', async (req, res) => {
     if (!isMatch) return res.status(400).json({ message: 'Mot de passe incorrect' });
 
     // Générer un JWT (Token)
-    const token = jwt.sign({ userId: user._id, email: user.email, role: user.role }, process.env.JWT_SECRET, { expiresIn: '5h' });
+    const token = jwt.sign({ userId: user._id, email: user.email, role: user.role }, process.env.JWT_SECRET, { expiresIn: '24h' });
 
     res.status(200).json({ success: true, token });
 });

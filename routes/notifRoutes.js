@@ -19,17 +19,21 @@ router.get('/notifications', authMiddleware,async (req, res) => {
 });
 
 
-router.post('/notifications/mark-as-read/:id', async (req, res) => {
+router.post('/notifications/read/:id', async (req, res) => {
     try {
         const notification = await Notification.findById(req.params.id);
         if (!notification) return res.status(404).json({ error: 'Notification non trouvée' });
 
-        await Notification.findByIdAndDelete(req.params.id);
-        res.json({ message: 'Notification supprimée après lecture' });
+        // Marquer la notification comme lue
+        notification.isRead = true;
+        await notification.save();  // Sauvegarder la notification après modification
+
+        res.json({ message: 'Notification marquée comme lue' });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
+
 
 router.post('/notifications/respond-invite/:id', async (req, res) => {
     try {
@@ -49,5 +53,30 @@ router.post('/notifications/respond-invite/:id', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+// Route pour supprimer une notification par id
+router.delete('/notifications/:id', authMiddleware, async (req, res) => {
+    try {
+        const notification = await Notification.findById(req.params.id);
+        if (!notification) return res.status(404).json({ error: 'Notification non trouvée' });
+
+        await Notification.findByIdAndDelete(req.params.id);
+        res.json({ message: 'Notification supprimée avec succès' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Route pour supprimer toute les notifications
+router.delete('/notifications', authMiddleware, async (req, res) => {
+    try {
+        const userId = req.user._id;
+        await Notification.deleteMany({ userId });
+
+        res.json({ message: 'Toutes les notifications ont été supprimées' });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 
 module.exports = router;
