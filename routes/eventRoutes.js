@@ -77,6 +77,7 @@ router.post('/addevents', authMiddleware, async (req, res) => {
             }
         }
 
+
         res.status(201).json(newEvent);
     } catch (error) {
         console.error('Erreur lors de l\'ajout de l\'événement:', error);
@@ -84,49 +85,50 @@ router.post('/addevents', authMiddleware, async (req, res) => {
     }
 });
 
+// router.post('/accept-invite', authMiddleware, async (req, res) => {
+//     try {
+//         console.log('Requête reçue:', req.body); // Log pour vérifier les données reçues
+//         const { eventId } = req.body;
+//         const userId = req.user._id;
+
+//         if (!eventId) {
+//             return res.status(400).json({ message: "L'ID de l'événement est requis." });
+//         }
+
+//         // Trouver l'événement et mettre à jour le statut
+//         const event = await Event.findOneAndUpdate(
+//             { _id: eventId, "participants.user": userId },
+//             { $set: { "participants.$.status": "accepted" } },
+//             { new: true }
+//         ).populate('participants.user', 'email');
+
+//         if (!event) {
+//             console.log(`Événement ${eventId} ou participant ${userId} non trouvé.`);
+//             return res.status(404).json({ message: "Événement ou invitation non trouvé." });
+//         }
+
+//         // Récupérer le participant concerné
+//         const participant = event.participants.find(p => p.user._id.toString() === userId.toString());
+
+//         if (participant.status === "accepted") {
+//             sendEventDetailsToUser(participant.user, event);
+//             console.log(`✅ Détails de l'événement envoyés à ${participant.user.email}`);
+//         } else {
+//             console.warn(`⚠️ Statut non mis à jour pour ${participant.user.email}`);
+//         }
+
+//         console.log('Réponse envoyée:', { message: "Invitation acceptée avec succès.", event });
+//         return res.status(200).json({ message: "Invitation acceptée avec succès.", event });
+//     } catch (error) {
+//         console.error('Erreur lors de l\'acceptation de l\'invitation:', error);
+//         return res.status(500).json({ message: "Erreur serveur lors de l'acceptation.", error: error.message });
+//     }
+// });
 
 
-// Ajouter un participant à un événement
-router.post('/events/:id/addParticipant', async (req, res) => {
-    try {
-        const eventId = req.params.id;
-        const { userId } = req.body;
 
-        if (!mongoose.Types.ObjectId.isValid(eventId) || !mongoose.Types.ObjectId.isValid(userId)) {
-            return res.status(400).json({ message: 'ID invalide' });
-        }
 
-        const event = await Event.findById(eventId);
-        if (!event) {
-            return res.status(404).json({ message: 'Événement non trouvé' });
-        }
 
-        // Vérifier si l'événement est lié à un utilisateur
-        if (!event.createdBy) {
-            return res.status(403).json({ message: 'Impossible d\'ajouter des participants à un événement anonyme.' });
-        }
-
-        const user = await User.findById(userId);
-        if (!user) {
-            return res.status(404).json({ message: 'Utilisateur non trouvé' });
-        }
-
-        // Vérifier si l'utilisateur est déjà un participant
-        const isAlreadyParticipant = event.participants.some(p => p.user.toString() === userId);
-        if (isAlreadyParticipant) {
-            return res.status(400).json({ message: 'Cet utilisateur est déjà un participant.' });
-        }
-
-        // Ajouter le participant
-        event.participants.push({ user: userId, status: 'pending' });
-        await event.save();
-
-        res.status(200).json({ message: 'Participant ajouté avec succès', event });
-    } catch (error) {
-        console.error('Erreur lors de l\'ajout d\'un participant:', error);
-        res.status(500).json({ message: 'Erreur lors de l\'ajout d\'un participant', error });
-    }
-});
 
 // Récupérer tous les événements
 // Récupérer les événements de l'utilisateur connecté
@@ -135,15 +137,18 @@ router.get('/events', authMiddleware, async (req, res) => {
         if (!req.user || !req.user._id) {
             return res.status(401).json({ message: 'Utilisateur non authentifié.' });
         }
+
         // Récupérer les événements créés par l'utilisateur ou auxquels il participe
         const events = await Event.find({
             $or: [
                 { createdBy: req.user._id }, // Événements créés par l'utilisateur
                 { 'participants.user': req.user._id } // Événements auxquels l'utilisateur participe
             ]
-        });
-        console.log('req', req.user._id);
+        })
+        .populate('createdBy', 'email') 
+        .populate('participants.user', 'email'); 
 
+        console.log('req', req.user._id);
 
         res.status(200).json(events);
     } catch (error) {
@@ -151,6 +156,7 @@ router.get('/events', authMiddleware, async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 });
+
 
 // Récupérer un événement par son ID
 router.get('/event/:id', async (req, res) => {
@@ -161,11 +167,13 @@ router.get('/event/:id', async (req, res) => {
             return res.status(400).json({ message: 'ID invalide' });
         }
 
-        const event = await Event.findById(eventId).populate('participants.user', 'name email');
+        const event = await Event.findById(eventId).populate('participants.user', 'email');
 
         if (!event) {
             return res.status(404).json({ message: 'Événement non trouvé' });
         }
+
+        
 
         res.status(200).json(event);
     } catch (error) {

@@ -3,9 +3,10 @@ const bcrypt = require('bcryptjs');
 
 // Schéma de l'utilisateur
 const userSchema = new mongoose.Schema({
+    name: { type: String, required: true }, // Ajout du champ name obligatoire
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
-    role: { type: String, default: 'user' },
+    role: { type: String, enum: ['user', 'admin'], default: 'user' }, // Rôle avec valeurs possibles user/admin
 }, { timestamps: true });
 
 // Méthode pour comparer le mot de passe avec celui dans la base de données
@@ -20,7 +21,6 @@ userSchema.pre('save', async function (next) {
     next();
 });
 
-// Correction ici : on utilise userSchema et non UserSchema
 const User = mongoose.model('User', userSchema);
 
 module.exports = User;

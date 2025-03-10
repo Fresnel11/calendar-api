@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const schedule = require('node-schedule');
 const WebSocket = require('ws');
 const Event = require('./models/Event');
+const User = require('./models/User');
 const jwt = require('jsonwebtoken');
 const Notification = require('./models/Notification');
 require('dotenv').config();
@@ -67,7 +68,15 @@ const sendWebSocketNotification = async(event) => {
 const sendWebSocketNotificationToUser = async (targetUser, event) => {
     console.log(`🔍 Tentative d'envoi de notification WebSocket à ${targetUser.email} (ID: ${targetUser._id})`);
 
-    const message = `📩 Vous avez été invité à participer à l'événement "${event.title}" . Acceptez-vous l'invitation ?`;
+    // Récupérer l'utilisateur qui a créé l'événement
+    const creator = await User.findById(event.createdBy).select('email');
+
+    if (!creator) {
+        console.warn(`⚠️ Impossible de trouver le créateur de l'événement ${event._id}`);
+        return;
+    }
+
+    const message = `Vous avez été ajouté à l'évènement "${event.title}" par "${creator.email}". Si vous n'êtes pas intéressé, veuillez supprimer l'évènement.`;
 
     // Sauvegarde de la notification en base de données
     await Notification.create({
@@ -80,14 +89,14 @@ const sendWebSocketNotificationToUser = async (targetUser, event) => {
     let found = false;
 
     wss.clients.forEach(client => {
-        // Vérifier si le client est le bon utilisateur
         if (client.readyState === WebSocket.OPEN && client.userId === targetUser._id.toString()) {
             console.log(`📡 Envoi de notification au client WebSocket avec userId: ${client.userId}`);
             client.send(JSON.stringify({
                 message,
                 event,
                 action: 'invite',
-                targetUserId: targetUser._id // Ajouter l'ID de l'utilisateur ciblé
+                targetUserId: targetUser._id,
+                createdByEmail: creator.email // Ajout de l'email du créateur dans la réponse
             }));
             found = true;
         }
@@ -99,6 +108,57 @@ const sendWebSocketNotificationToUser = async (targetUser, event) => {
         console.warn(`⚠️ Aucun client WebSocket trouvé pour ${targetUser.email} (ID: ${targetUser._id})`);
     }
 };
+
+
+// const sendWebSocketNotificationToUser = async (targetUser, event) => {
+//     console.log(`🔍 Tentative d'envoi de notification WebSocket à ${targetUser.email} (ID: ${targetUser._id})`);
+
+//     const message = `Vous avez été ajouté à l'évènement "${event.title}" par "${event.createdBy}". Si vous n'êtes pas intéréssé veuillez supprimer l'évènement.`; ;
+
+//     // Sauvegarde de la notification en base de données
+//     await Notification.create({
+//         userId: targetUser._id,
+//         type: 'invite',
+//         message: message
+//     });
+
+//     let found = false;
+
+//     wss.clients.forEach(client => {
+//         if (client.readyState === WebSocket.OPEN && client.userId === targetUser._id.toString()) {
+//             console.log(`📡 Envoi de notification au client WebSocket avec userId: ${client.userId}`);
+//             client.send(JSON.stringify({
+//                 message,
+//                 action: 'invite',
+//                 targetUserId: targetUser._id 
+//             }));
+//             found = true;
+//         }
+//     });
+
+//     if (found) {
+//         console.log(`✅ Notification envoyée à ${targetUser.email} (ID: ${targetUser._id})`);
+//     } else {
+//         console.warn(`⚠️ Aucun client WebSocket trouvé pour ${targetUser.email} (ID: ${targetUser._id})`);
+//     }
+// };
+
+
+// const sendEventDetailsToUser = async (targetUser, event) => {
+//     console.log(`🔍 Envoi des détails de l'événement à ${targetUser.email} (ID: ${targetUser._id})`);
+
+//     wss.clients.forEach(client => {
+//         if (client.readyState === WebSocket.OPEN && client.userId === targetUser._id.toString()) {
+//             client.send(JSON.stringify({
+//                 message: `🎉 Vous avez accepté l'invitation à l'événement "${event.title}".`,
+//                 event, 
+//                 action: 'event_details',
+//                 targetUserId: targetUser._id
+//             }));
+//         }
+//     });
+// };
+
 
 
 // Fonction pour calculer le moment du rappel
