@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 
 // Schéma de l'utilisateur
 const userSchema = new mongoose.Schema({
-    name: { type: String, required: true }, // Ajout du champ name obligatoire
+    username: { type: String, required: true }, // Ajout du champ name obligatoire
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
     role: { type: String, enum: ['user', 'admin'], default: 'user' }, // Rôle avec valeurs possibles user/admin
