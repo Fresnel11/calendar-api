@@ -35,32 +35,7 @@ const sendWebSocketNotification = (event) => {
 };
 
 
-// Fonction pour envoyer un email de rappel
-const sendEmailNotification = async (event) => {
-    const transporter = nodemailer.createTransport({
-        host: "sandbox.smtp.mailtrap.io",
-        port: 2525,
-        auth: {
-            user: "3a20dd5c090263",
-            pass: "fc054ab0d9c60b"
-        }
-    });
 
-
-    const mailOptions = {
-        from: "3a20dd5c090263",
-        to: 'fresneljeanclaudecossou64@gmail.com',
-        subject: `Rappel : ${event.title}`,
-        text: `Votre événement "${event.title}" est prévu le ${new Date(event.startDate).toLocaleString()}`
-    };
-
-    try {
-        await transporter.sendMail(mailOptions);
-        console.log(`📧 Email envoyé pour ${event.title}`);
-    } catch (error) {
-        console.error('❌ Erreur envoi email', error);
-    }
-};
 
 // Fonction pour calculer le moment du rappel
 const getReminderTime = (event) => {
@@ -108,7 +83,6 @@ schedule.scheduleJob('* * * * *', async () => {
             console.log(`⏰ Envoi de la notification pour : ${event.title}`);
 
             sendWebSocketNotification(event);
-            await sendEmailNotification(event);
 
             // Marquer l'événement comme notifié
             event.notificationSent = true;
